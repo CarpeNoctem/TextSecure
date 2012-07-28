@@ -31,6 +31,7 @@ import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.sms.MultipartMessageHandler;
 import org.thoughtcrime.securesms.sms.SmsTransportDetails;
 import org.thoughtcrime.securesms.util.InvalidMessageException;
+import org.thoughtcrime.securesms.ApplicationPreferencesActivity;
 
 import android.app.PendingIntent;
 import android.content.Context;
@@ -39,6 +40,8 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.telephony.SmsManager;
 import android.util.Log;
+import android.preference.PreferenceManager;
+import android.text.ClipboardManager;
 
 public class SmsSender {
 
@@ -141,7 +144,10 @@ public class SmsSender {
       deliverGSMTransportTextMessage(recipient, prefix.calculatePrefix(text) + text, messageId, type);
       return;
     }
-		
+    if (!PreferenceManager.getDefaultSharedPreferences(context).getBoolean(ApplicationPreferencesActivity.SEND_DIRECT_PREF, true)) {
+      sendIndirect(prefix.calculatePrefix(text) + text, recipient, messageId);
+      return;
+    }
     ArrayList<String> messages = multipartMessageHandler.divideMessage(recipient, text, prefix);
     ArrayList<PendingIntent> sentIntents = constructSentIntents(messageId, type, messages);
     for (int i=0;i<messages.size();i++) {
@@ -159,10 +165,14 @@ public class SmsSender {
   }
 		
   private void deliverTextMessage(String recipient, String text, long messageId, long type) {
-    if (!isSecureMessage(type) && !isKeyExchange(text))
-      deliverGSMTransportTextMessage(recipient, text, messageId, type);
-    else
-      deliverSecureTransportTextMessage(recipient, text, messageId, type);		
+    if (!isSecureMessage(type) && !isKeyExchange(text)) {
+      if (PreferenceManager.getDefaultSharedPreferences(context).getBoolean(ApplicationPreferencesActivity.SEND_DIRECT_PREF, true))
+        deliverGSMTransportTextMessage(recipient, text, messageId, type);
+      else
+        sendIndirect(text, recipient, messageId);
+    } else {
+      deliverSecureTransportTextMessage(recipient, text, messageId, type);
+    }
   }
 	
   private boolean isSecureMessage(long type) {
@@ -179,5 +189,29 @@ public class SmsSender {
       return new String(cipher.encryptMessage(body.getBytes()));
     }
   }
-	
+
+  private boolean sendIndirect(String text, String recipient, long messageId) {
+      boolean result = false;
+      try {
+          Log.e("SmsSender","Attempting indirect message to " + recipient);
+          //Intent smsIntent = new Intent(Intent.ACTION_SENDTO);
+          Intent smsIntent = new Intent(Intent.ACTION_SENDTO);
+          smsIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+          //smsIntent.addCategory(Intent.CATEGORY_DEFAULT);
+          //smsIntent.setType("vnd.android-dir/mms-sms");
+          smsIntent.setData(Uri.parse("sms:" + recipient.replace(" ","").replace("-", "")));
+          //smsIntent.setData(Uri.parse("smsto:" + recipient));
+          //smsIntent.putExtra("address", recipient);
+          smsIntent.putExtra("sms_body",text);
+          ClipboardManager clipman = (ClipboardManager) this.context.getSystemService("clipboard");
+          clipman.setText(text);
+          this.context.startActivity(smsIntent);
+          result = true;
+          DatabaseFactory.getSmsDatabase(context).markAsSent(messageId, SmsDatabase.Types.SENT_TYPE);
+      } catch (Exception e){
+          Log.w("SmsSender", e);
+          DatabaseFactory.getSmsDatabase(context).markAsSentFailed(messageId);
+      }
+      return result;
+  }
 }

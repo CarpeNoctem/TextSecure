@@ -65,6 +65,7 @@ public class ApplicationPreferencesActivity extends PreferenceActivity {
   public static final String PASSPHRASE_TIMEOUT_INTERVAL_PREF = "pref_timeout_interval";
   public static final String PASSPHRASE_TIMEOUT_PREF          = "pref_timeout_passphrase";
   public static final String AUTO_KEY_EXCHANGE_PREF           = "pref_auto_complete_key_exchange";
+  public static final String SEND_DIRECT_PREF                 = "pref_send_direct";
 	
   private static final String VIEW_MY_IDENTITY_PREF        = "pref_view_identity";
   private static final String EXPORT_MY_IDENTITY_PREF      = "pref_export_identity";
